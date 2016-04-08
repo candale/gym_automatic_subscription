@@ -16,13 +16,7 @@ class CrossfitScheduler(object):
 
     def __init__(self, email, *args, **kwargs):
         self._email = email
-        self._driver = webdriver.Firefox()
-        self._driver.get(
-            'http://89.137.4.84/site/Extern.php?sectiune=program')
-        self._driver.switch_to.frame(
-            self._driver.find_element_by_id('changer2'))
-
-        self._activities = self._get_all_activities()
+        self._driver = webdriver.PhantomJS()
 
     def _get_all_activities(self):
         activities = []
@@ -115,10 +109,17 @@ class CrossfitScheduler(object):
             return None
 
     def _finish_scheduling(self, schedule_button):
+        # Hackish so that every confirm is true so we don't have to
+        # deal with pressing OK
+        self._driver.execute_script(
+            "window.confirm = function(){ return true; }")
         logging.info('Finishing schedule')
 
         schedule_button.click()
-        self._driver.switch_to.alert.accept()
+
+        # This does not work with PhantomJs, hence
+        # the first two lines in this method
+        #self._driver.switch_to.alert.accept()
 
     def _schedule(self, activity):
         logging.info('Trying to schedule for activity {}'.format(activity))
@@ -137,6 +138,12 @@ class CrossfitScheduler(object):
             'Successfully scheduled for activity {}'.format(activity))
 
         return True
+
+    def _go_to_schedule_page(self):
+        self._driver.get(
+            'http://89.137.4.84/site/Extern.php?sectiune=program')
+        self._driver.switch_to.frame(
+            self._driver.find_element_by_id('changer2'))
 
     def schedule(self, activity_name, date, time):
         '''
@@ -161,7 +168,9 @@ class CrossfitScheduler(object):
                 activity_name, date, *time)
         )
 
-        activity = filter(activity_matches, self._activities)
+        self._go_to_schedule_page()
+        activities = self._get_all_activities()
+        activity = filter(activity_matches, activities)
 
         if not activity:
             logging.info('No activity found')
@@ -176,6 +185,9 @@ class CrossfitScheduler(object):
 
         return self._schedule(activity[0])
 
+    def cancel_schedule(self, activity_name, date, time):
+        pass
 
-a = CrossfitScheduler('some_email_example@email.com')
+
+a = CrossfitScheduler('some_email@gmail.com')
 a.schedule('Crossfit', datetime.date(2016, 4, 9), (14, 0))
