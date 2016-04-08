@@ -1,91 +1,132 @@
 import datetime
-import time
 import re
-from copy import copy
+import urlparse
 
 from selenium import webdriver
 from selenium.common.exceptions import NoSuchElementException
 
 
-class CrossfitTimeTableBuilder(list):
-    day_regex = re.compile('(?P<day_name>[^\s]+)\s\((?P<day_number>\d+)\)')
+class CrossfitScheduler(object):
+    class Activities:
+        CROSSFIT = 'Crossfit'
 
-    def __init__(self, *args, **kwargs):
-        super(CrossfitTimeTableBuilder, self).__init__(*args, **kwargs)
+    def __init__(self, email, *args, **kwargs):
+        self._email = email
+        self._driver = webdriver.Firefox()
+        self._driver.get(
+            'http://89.137.4.84/site/Extern.php?sectiune=program')
+        self._driver.switch_to.frame(
+            self._driver.find_element_by_id('changer2'))
 
-        self.driver = webdriver.Firefox()
-        self.driver.get('http://89.137.4.84/site/Extern.php?sectiune=program')
-        self.driver.switch_to.frame(self.driver.find_element_by_id('changer2'))
-        self._build_time_table()
+        self._activities = self._get_all_activities()
 
-    def _build_time_table(self):
-        table_rows = self.driver.find_elements_by_tag_name('tr')
-        header = table_rows[0].find_elements_by_tag_name('th')
-        activities_rows = [
-            table_row.find_elements_by_tag_name('td')
-            for table_row in table_rows[1:]
-        ]
+    def _get_all_activities(self):
+        activities = []
+        valid_elements = self._driver.find_elements_by_xpath(
+            "//td[.//a[contains(@href, 'programari')]]")
 
-        header_dates = self._get_header_dates_starting_with_today(header)
-        self._build_activities(activities_rows, header_dates)
+        for element in valid_elements:
+            links = element.find_elements_by_xpath(
+                ".//a[contains(@href, 'programari')]")
+            infos = element.find_elements_by_xpath(
+                ".//div[contains(@id, 'info')]")
+            names = element.find_elements_by_xpath(".//strong")
 
-    def _get_activity_name_and_schedule_link_from_element(self, activity):
-        activity_name = schedule_element = None
+            activity_raw_data = zip(names, links, infos)
 
+            for data in activity_raw_data:
+                activities.append(self._make_activity(data))
+
+        return activities
+
+    def _get_date_from_url_element(self, url_element):
+        '''
+        Url example:
+        http://89.137.4.84/site/Extern.php?sectiune=programari2&ID_CL=85.0&wData=08-04-2016
+        '''
+        url = url_element.get_attribute('href')
+        parsed_url = urlparse.urlparse(url)
+        args = urlparse.parse_qs(parsed_url.query)
+
+        assert 'wData' in args and len(args['wData']) == 1,\
+               'There should be a date'
+
+        return datetime.datetime.strptime(args['wData'][0], '%d-%m-%Y').date()
+
+    def _get_start_hour_from_info_element(self, info_element):
+        info_text = info_element.get_attribute('textContent')
+        # We're looking for something like this: "bla bla 07:00-08:00"
+        time = re.match(
+            '.*(?P<start>\d\d:\d\d)-(?P<end>\d\d:\d\d)$', info_text)
+
+        start = time.group('start')
+        hour, minute = start.split(':')
+        return int(hour), int(minute)
+
+    def _make_activity(self, data):
+        return {
+            'name': data[0].text.strip(),
+            'url': data[1].get_attribute('href'),
+            'date': self._get_date_from_url_element(data[1]),
+            'time': self._get_start_hour_from_info_element(data[2]),
+        }
+
+    def _login(self):
+        form = self._driver.find_element_by_xpath('//form')
+        email_input = form.find_element_by_xpath(
+            ".//input[contains(@name, 'email')]")
+        submit_but = form.find_element_by_xpath(".//img")
+
+        email_input.send_keys(self._email)
+        submit_but.submit()
+
+    def _get_schedule_button(self):
+        table = self._driver.find_element_by_xpath("//table[@id='hor-zebra1']")
         try:
-            activity_name = (
-                activity.find_element_by_tag_name('strong').text)
-            schedule_element = activity.find_elements_by_tag_name('a')
+            return table.find_element_by_xpath('.//a')
         except NoSuchElementException:
-            pass
+            return None
 
-        return activity_name, schedule_element
+    def _finish_scheduling(self, schedule_button):
+        schedule_button.click()
+        self._driver.switch_to.alert.accept()
 
-    def _build_activities(self, activities_rows, header_dates):
-        now = datetime.datetime.now()
-        weekday = now.weekday()
+    def _schedule(self, activity):
+        self._driver.get(activity['url'])
+        self._login()
+        schedule_button = self._get_schedule_button()
 
-        for activity_row in activities_rows:
-            activity_row = copy(activity_row)
-            hour_str = activity_row.pop(0).text
+        if schedule_button is None:
+            return False
 
-            if not hour_str:
-                continue
+        self._finish_scheduling(schedule_button)
 
-            hour = int(hour_str.split(':')[0])
+        return True
 
-            # get only activities from today onward
-            counter = weekday
-            while counter < 7:
-                activity = activity_row[counter]
-                date = header_dates[counter]
+    def schedule(self, activity_name, date, time):
+        '''
+        ** activity
+            The name of the activity you want to make a schedule to
+        ** time
+            A tuple with two values, the first one being the hour (in 24 hour
+            format) and the second the minute
+        ** date
+            A date which has specified only year, month and date
+        '''
+        def activity_matches(activity):
+            return all([
+                activity['name'] == activity_name,
+                activity['time'] == time,
+                activity['date'] == date,
+            ])
 
-                activity_name, schedule_element = (
-                    self._get_activity_name_and_schedule_link_from_element(
-                        activity
-                    )
-                )
+        activity = filter(activity_matches, self._activities)
 
-                if schedule_element and activity_name:
-                    self.append({
-                        'name': activity_name,
-                        'date': datetime.datetime(
-                            date.year, date.month, date.day, hour)
-                    })
+        if not activity:
+            return False
 
-                counter += 1
-
-    def _get_header_dates_starting_with_today(self, header_list):
-        now = datetime.datetime.now()
-        weekday = now.weekday()
-        dates = [None] * weekday
-
-        for i in range(7 - weekday):
-            dates.append(
-                datetime.date(now.year, now.month, now.day + i))
-
-        return dates
+        return self._schedule(activity[0])
 
 
-
-a = CrossfitTimeTableBuilder()
+a = CrossfitScheduler('some_email_address@email.com')
+a.schedule('Crossfit', datetime.date(2016, 4, 9), (14, 0))
