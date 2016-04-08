@@ -1,9 +1,13 @@
 import datetime
-import re
 import urlparse
+import logging
+import re
 
 from selenium import webdriver
 from selenium.common.exceptions import NoSuchElementException
+
+
+logging.basicConfig(filename='gym.log', level=logging.INFO)
 
 
 class CrossfitScheduler(object):
@@ -22,19 +26,28 @@ class CrossfitScheduler(object):
 
     def _get_all_activities(self):
         activities = []
+        logging.info('Getting all schedule-able activities')
+
         valid_elements = self._driver.find_elements_by_xpath(
             "//td[.//a[contains(@href, 'programari')]]")
 
         for element in valid_elements:
+            logging.info('Getting all schedule links')
             links = element.find_elements_by_xpath(
                 ".//a[contains(@href, 'programari')]")
+
+            logging.info('Getting information about activities')
             infos = element.find_elements_by_xpath(
                 ".//div[contains(@id, 'info')]")
+
+            logging.info('Getting activities names')
             names = element.find_elements_by_xpath(".//strong")
 
+            logging.info('Aggregating links infos and names')
             activity_raw_data = zip(names, links, infos)
 
             for data in activity_raw_data:
+                logging.info('Making activity with data {}'.format(data))
                 activities.append(self._make_activity(data))
 
         return activities
@@ -44,9 +57,14 @@ class CrossfitScheduler(object):
         Url example:
         http://89.137.4.84/site/Extern.php?sectiune=programari2&ID_CL=85.0&wData=08-04-2016
         '''
+        logging.info('Extracting url from url element')
         url = url_element.get_attribute('href')
+
+        logging.info('Extracted url {}'.format(url))
         parsed_url = urlparse.urlparse(url)
         args = urlparse.parse_qs(parsed_url.query)
+
+        logging.info('Got following args from url {}'.format(args))
 
         assert 'wData' in args and len(args['wData']) == 1,\
                'There should be a date'
@@ -55,23 +73,31 @@ class CrossfitScheduler(object):
 
     def _get_start_hour_from_info_element(self, info_element):
         info_text = info_element.get_attribute('textContent')
+        logging.info('Extracting start time from info "{}"'.format(info_text))
+
         # We're looking for something like this: "bla bla 07:00-08:00"
         time = re.match(
             '.*(?P<start>\d\d:\d\d)-(?P<end>\d\d:\d\d)$', info_text)
 
         start = time.group('start')
         hour, minute = start.split(':')
+        logging.info('Got start hour {} and minute {}'.format(hour, minute))
+
         return int(hour), int(minute)
 
     def _make_activity(self, data):
-        return {
+        activity = {
             'name': data[0].text.strip(),
             'url': data[1].get_attribute('href'),
             'date': self._get_date_from_url_element(data[1]),
             'time': self._get_start_hour_from_info_element(data[2]),
         }
+        logging.info('Created activity {}'.format(activity))
+
+        return activity
 
     def _login(self):
+        logging.info('Starting login')
         form = self._driver.find_element_by_xpath('//form')
         email_input = form.find_element_by_xpath(
             ".//input[contains(@name, 'email')]")
@@ -81,6 +107,7 @@ class CrossfitScheduler(object):
         submit_but.submit()
 
     def _get_schedule_button(self):
+        logging.info('Retrieving the schedule button')
         table = self._driver.find_element_by_xpath("//table[@id='hor-zebra1']")
         try:
             return table.find_element_by_xpath('.//a')
@@ -88,18 +115,26 @@ class CrossfitScheduler(object):
             return None
 
     def _finish_scheduling(self, schedule_button):
+        logging.info('Finishing schedule')
+
         schedule_button.click()
         self._driver.switch_to.alert.accept()
 
     def _schedule(self, activity):
+        logging.info('Trying to schedule for activity {}'.format(activity))
+
         self._driver.get(activity['url'])
         self._login()
         schedule_button = self._get_schedule_button()
 
         if schedule_button is None:
+            logging.info('NO POSITIONS LEFT')
             return False
 
         self._finish_scheduling(schedule_button)
+
+        logging.info(
+            'Successfully scheduled for activity {}'.format(activity))
 
         return True
 
@@ -120,13 +155,27 @@ class CrossfitScheduler(object):
                 activity['date'] == date,
             ])
 
+        logging.info(
+            'Searching for activity with search params -'
+            ' Name: {}, Date: {}, Time: {}:{}'.format(
+                activity_name, date, *time)
+        )
+
         activity = filter(activity_matches, self._activities)
 
         if not activity:
+            logging.info('No activity found')
+            return False
+
+        if len(activity) > 1:
+            logging.error(
+                'Weird. There are more than one activities for given search '
+                'params. That should not happen. Aborting'
+            )
             return False
 
         return self._schedule(activity[0])
 
 
-a = CrossfitScheduler('some_email_address@email.com')
+a = CrossfitScheduler('some_email_example@email.com')
 a.schedule('Crossfit', datetime.date(2016, 4, 9), (14, 0))
