@@ -13,6 +13,12 @@ logging.basicConfig(filename='gym.log', level=logging.INFO)
 class CrossfitScheduler(object):
     class Activities:
         CROSSFIT = 'Crossfit'
+        TRX = 'Trx'
+        FREESTYLE = 'Freestyle'
+        METABOLIC = 'Metabolic'
+        PILATES = 'Pilates'
+        YOGA = 'Yoga'
+        XTREME = 'Xtreme'
 
     def __init__(self, email, *args, **kwargs):
         self._email = email
@@ -134,6 +140,13 @@ class CrossfitScheduler(object):
         email_input.send_keys(self._email)
         submit_but.submit()
 
+        # Try and see if the login was successful
+        try:
+            self._driver.find_element_by_link_text('Incearca din nou')
+            raise ValueError('Could not login')
+        except NoSuchElementException:
+            pass
+
     def _get_schedule_button(self):
         logging.info('Retrieving the schedule button')
         table = self._driver.find_element_by_xpath("//table[@id='hor-zebra1']")
@@ -160,7 +173,7 @@ class CrossfitScheduler(object):
 
         if schedule_button is None:
             logging.info('NO POSITIONS LEFT')
-            return False
+            raise ValueError('There is no open positions for selected options')
 
         self._finish_scheduling(schedule_button)
 
@@ -200,7 +213,8 @@ class CrossfitScheduler(object):
 
             if len(elements) != EXPECTED_NUMBER_OF_COLUMNS:
                 logging.error('There should be 8 columns')
-                return False
+                raise ValueError(
+                    'There should be 8 columns. Somehting is wrong')
 
             last_element = elements[EXPECTED_NUMBER_OF_COLUMNS - 1]
             if 'Activa' not in last_element.text:
@@ -264,9 +278,11 @@ class CrossfitScheduler(object):
         if len(activity) > 1:
             logging.error(
                 'Weird. There are more than one activities for given search '
-                'params. That should not happen. Aborting'
+                'params. That should not happen. Aborting. '
+                'Details: {}'.format(activity)
             )
-            return False
+            raise ValueError(
+                'There should not be more activities for single search')
 
         succeessful = self._schedule(activity[0])
         self._dispose_of_driver()
@@ -294,22 +310,22 @@ class CrossfitScheduler(object):
         schedule = filter(schedule_matches, active_schedules)
 
         if not schedule:
-            return False
+            # TODO: make something prettier than this.
+            self._dispose_of_driver()
+            raise ValueError('No schedules found for given options')
 
         if len(schedule) > 1:
             logging.error(
                 'Weird. There are more than one schedules for given search '
                 'params. That should not happen. Aborting'
+                'Details: {}'.format(schedule)
             )
-            return False
+            raise ValueError(
+                'There should not be more than one schedule for a search')
 
         self._finish_cancelling(schedule[0])
 
+        # TODO: make something prettier than this.
         self._dispose_of_driver()
 
         return True
-
-
-a = CrossfitScheduler('')
-a.schedule('Crossfit', datetime.date(2016, 4, 12), (7, 0))
-a.cancel_schedule('Crossfit', datetime.date(2016, 4, 12), (7, 0))

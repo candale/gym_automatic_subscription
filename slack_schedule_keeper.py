@@ -4,6 +4,7 @@ from slackclient import SlackClient
 
 import settings
 
+
 sc = SlackClient(settings.SLACK_TOKEN)
 
 
