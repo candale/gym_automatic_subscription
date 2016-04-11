@@ -65,7 +65,7 @@ def cli():
     pass
 
 
-@cli.command()
+@cli.group()
 @click.option('--email', type=click.STRING, required=True,
               help='Email address for the registration')
 @click.option('--activity', type=ClassParamType(), required=True,
@@ -75,6 +75,12 @@ def cli():
 @click.option('--time', type=TimeParamType(), required=True,
               help='The time of the registration')
 def schedule(email, activity, date, time):
+    '''Manage registrations'''
+    pass
+
+
+@schedule.command()
+def create(email, activity, date, time):
     '''Register for a class'''
     scheduler = CrossfitScheduler(email)
 
@@ -89,16 +95,8 @@ def schedule(email, activity, date, time):
         raise click.ClickException('Failed with reason: {}'.format(e))
 
 
-@cli.command()
-@click.option('--email', type=click.STRING, required=True,
-              help='Email address for the registration')
-@click.option('--activity', type=ClassParamType(), required=True,
-              help='The activity you want to register for')
-@click.option('--date', type=DateParamType(), required=True,
-              help='The date for the registration')
-@click.option('--time', type=TimeParamType(), required=True,
-              help='The time of the registration')
-def cancel_schedule(email, activity, date, time):
+@schedule.command()
+def cancel(email, activity, date, time):
     '''Cancel a registration'''
     scheduler = CrossfitScheduler(email)
 
