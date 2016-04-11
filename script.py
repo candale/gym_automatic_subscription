@@ -16,31 +16,65 @@ class CrossfitScheduler(object):
 
     def __init__(self, email, *args, **kwargs):
         self._email = email
-        self._driver = webdriver.PhantomJS()
+
+    def _init_driver(self):
+        self._driver = webdriver.Firefox()
+
+    def _dispose_of_driver(self):
+        self._driver.close()
+        self._driver.quit()
 
     def _get_all_activities(self):
-        activities = []
-        logging.info('Getting all schedule-able activities')
+        '''
+        Return a list of dictionaries that represents all the active
+        activities.
 
-        valid_elements = self._driver.find_elements_by_xpath(
+        If an activity can be scheduled, there should be the
+        following in the DOM structure
+        <strong> ... </strong>              -> name
+        <a> ... </a>                        -> schedule link
+        <div id="info_<number>"> ... </div> -> activity info
+        '''
+        def get_active_activities_from_cell(cell):
+            def is_active_activity(elements):
+                if len(elements) != 3:
+                    return False
+
+                a_href = elements[1].get_attribute('href') or ''
+                div_id = elements[2].get_attribute('id') or ''
+                return all((
+                    elements[0].tag_name == 'strong',
+                    elements[1].tag_name == 'a',
+                    elements[2].tag_name == 'div',
+                    'info' in div_id,
+                    'sectiune=programari' in a_href,
+                ))
+
+            active = []
+            elements = cell.find_elements_by_xpath('child::*')
+
+            counter = 0
+            while counter < len(elements) - 2:
+                sample = elements[counter: counter + 3]
+
+                if is_active_activity(sample):
+                    # name, link, info
+                    active.append(tuple(sample))
+                    counter += 4
+                else:
+                    counter += 1
+
+            return active
+
+        logging.info('Getting all schedule-able activities')
+        activities = []
+        valid_table_cells = self._driver.find_elements_by_xpath(
             "//td[.//a[contains(@href, 'programari')]]")
 
-        for element in valid_elements:
-            logging.info('Getting all schedule links')
-            links = element.find_elements_by_xpath(
-                ".//a[contains(@href, 'programari')]")
+        for cell in valid_table_cells:
+            raw_data = get_active_activities_from_cell(cell)
 
-            logging.info('Getting information about activities')
-            infos = element.find_elements_by_xpath(
-                ".//div[contains(@id, 'info')]")
-
-            logging.info('Getting activities names')
-            names = element.find_elements_by_xpath(".//strong")
-
-            logging.info('Aggregating links infos and names')
-            activity_raw_data = zip(names, links, infos)
-
-            for data in activity_raw_data:
+            for data in raw_data:
                 logging.info('Making activity with data {}'.format(data))
                 activities.append(self._make_activity(data))
 
@@ -117,10 +151,6 @@ class CrossfitScheduler(object):
 
         schedule_button.click()
 
-        # This does not work with PhantomJs, hence
-        # the first two lines in this method
-        #self._driver.switch_to.alert.accept()
-
     def _schedule(self, activity):
         logging.info('Trying to schedule for activity {}'.format(activity))
 
@@ -145,6 +175,59 @@ class CrossfitScheduler(object):
         self._driver.switch_to.frame(
             self._driver.find_element_by_id('changer2'))
 
+    def _go_to_created_schedules_page(self):
+        logging.info('Going to active schedules page')
+
+        self._driver.get('http://89.137.4.84/')
+        self._login()
+
+        schedules_link = self._driver.find_element_by_xpath(
+            "//a[contains(@href, 'sectiune=programari')]")
+        schedules_link.click()
+
+    def _get_active_created_schedules(self):
+        EXPECTED_NUMBER_OF_COLUMNS = 8
+
+        logging.info('Getting a list of active schedules')
+
+        active_schedules = []
+        table = self._driver.find_element_by_xpath(
+            "//table[@id='gradient-style']/tbody")
+        all_schedules = table.find_elements_by_xpath(".//tr")
+
+        for schedule in all_schedules:
+            elements = schedule.find_elements_by_xpath('.//td')
+
+            if len(elements) != EXPECTED_NUMBER_OF_COLUMNS:
+                logging.error('There should be 8 columns')
+                return False
+
+            last_element = elements[EXPECTED_NUMBER_OF_COLUMNS - 1]
+            if 'Activa' not in last_element.text:
+                continue
+
+            hour, minute = elements[4].text.split(':')
+            cancel_but = last_element.find_element_by_xpath('.//a')
+            active_schedules.append({
+                'name': elements[0].text,
+                'date': datetime.datetime.strptime(
+                    elements[3].text, '%Y-%m-%d').date(),
+                'time': (int(hour), int(minute)),
+                'cancel_but': cancel_but
+            })
+
+        return active_schedules
+
+    def _finish_cancelling(self, schedule):
+        # Hackish so that every confirm is true so we don't have to
+        # deal with pressing OK
+        self._driver.execute_script(
+            "window.confirm = function(){ return true; }")
+
+        schedule['cancel_but'].click()
+
+        logging.info('Canceled schedule {}'.format(schedule))
+
     def schedule(self, activity_name, date, time):
         '''
         ** activity
@@ -161,6 +244,8 @@ class CrossfitScheduler(object):
                 activity['time'] == time,
                 activity['date'] == date,
             ])
+
+        self._init_driver()
 
         logging.info(
             'Searching for activity with search params -'
@@ -183,11 +268,48 @@ class CrossfitScheduler(object):
             )
             return False
 
-        return self._schedule(activity[0])
+        succeessful = self._schedule(activity[0])
+        self._dispose_of_driver()
+
+        return succeessful
 
     def cancel_schedule(self, activity_name, date, time):
-        pass
+        def schedule_matches(schedule):
+            return all([
+                schedule['name'] == activity_name,
+                schedule['time'] == time,
+                schedule['date'] == date,
+            ])
+
+        self._init_driver()
+
+        logging.info(
+            'Trying to cancel schedule with '
+            'Name: {}, Date: {}, Time: {}:{}'.format(
+                activity_name, date, *time)
+        )
+
+        self._go_to_created_schedules_page()
+        active_schedules = self._get_active_created_schedules()
+        schedule = filter(schedule_matches, active_schedules)
+
+        if not schedule:
+            return False
+
+        if len(schedule) > 1:
+            logging.error(
+                'Weird. There are more than one schedules for given search '
+                'params. That should not happen. Aborting'
+            )
+            return False
+
+        self._finish_cancelling(schedule[0])
+
+        self._dispose_of_driver()
+
+        return True
 
 
-a = CrossfitScheduler('some_email@gmail.com')
-a.schedule('Crossfit', datetime.date(2016, 4, 9), (14, 0))
+a = CrossfitScheduler('')
+a.schedule('Crossfit', datetime.date(2016, 4, 12), (7, 0))
+a.cancel_schedule('Crossfit', datetime.date(2016, 4, 12), (7, 0))
