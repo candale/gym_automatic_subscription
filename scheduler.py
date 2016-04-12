@@ -23,12 +23,25 @@ class CrossfitScheduler(object):
     def __init__(self, email, *args, **kwargs):
         self._email = email
 
+    def __enter__(self):
+        self._init_driver()
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self._dispose_of_driver()
+
     def _init_driver(self):
         self._driver = webdriver.Firefox()
 
     def _dispose_of_driver(self):
         self._driver.close()
         self._driver.quit()
+
+    def start_driver(self):
+        self._init_driver()
+
+    def close_driver(self):
+        self._dispose_of_driver()
 
     def _get_all_activities(self):
         '''
@@ -259,8 +272,6 @@ class CrossfitScheduler(object):
                 activity['date'] == date,
             ])
 
-        self._init_driver()
-
         logging.info(
             'Searching for activity with search params -'
             ' Name: {}, Date: {}, Time: {}:{}'.format(
@@ -285,7 +296,6 @@ class CrossfitScheduler(object):
                 'There should not be more activities for single search')
 
         succeessful = self._schedule(activity[0])
-        self._dispose_of_driver()
 
         return succeessful
 
@@ -296,8 +306,6 @@ class CrossfitScheduler(object):
                 schedule['time'] == time,
                 schedule['date'] == date,
             ])
-
-        self._init_driver()
 
         logging.info(
             'Trying to cancel schedule with '
@@ -310,8 +318,6 @@ class CrossfitScheduler(object):
         schedule = filter(schedule_matches, active_schedules)
 
         if not schedule:
-            # TODO: make something prettier than this.
-            self._dispose_of_driver()
             raise ValueError('No schedules found for given options')
 
         if len(schedule) > 1:
@@ -324,8 +330,5 @@ class CrossfitScheduler(object):
                 'There should not be more than one schedule for a search')
 
         self._finish_cancelling(schedule[0])
-
-        # TODO: make something prettier than this.
-        self._dispose_of_driver()
 
         return True
