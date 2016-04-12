@@ -4,7 +4,7 @@ import re
 
 import click
 
-from scheduler import CrossfitScheduler
+from scheduler.scheduler import CrossfitScheduler
 
 
 class DateTimeParamType(click.ParamType):
@@ -106,7 +106,7 @@ def create(email, activity, date):
               help='Email address for the registration')
 @click.option('--activity', type=ClassParamType(), required=True,
               help='The activity you want to register for')
-@click.option('--date', type=DateTimeParamType(), required=True, nargs=10,
+@click.option('--date', type=DateTimeParamType(), required=True,
               multiple=True, help='The date(s) for the registration')
 def cancel(email, activity, date):
     '''Cancel a registration'''

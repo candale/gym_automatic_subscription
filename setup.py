@@ -4,7 +4,7 @@ from setuptools import setup
 setup(
     name='GymSub',
     version='1.0',
-    py_modules=['cli'],
+    py_modules=['clients.cli'],
     install_requires=[
         "backports.ssl-match-hostname==3.5.0.1",
         "click==6.6",
@@ -18,6 +18,6 @@ setup(
     ],
     entry_points='''
         [console_scripts]
-        gym_sub=cli:cli
+        gym_sub=clients.cli:cli
     ''',
 )

@@ -1,9 +1,14 @@
+import re
 import time
-import subprocess
+from subprocess import Popen, PIPE, STDOUT
 
 from slackclient import SlackClient
 
 import settings
+from clients.cli import cli
+
+
+sc = SlackClient(settings.SLACK_TOKEN)
 
 
 def raise_if_not_ok(response):
@@ -31,7 +36,7 @@ def get_user_id_by_name(name):
 
     users = users_response['members']
 
-    user = filter(lambda user: user['profile']['name'] == name, users)
+    user = filter(lambda user: user['name'] == name, users)
 
     if not user:
         raise ValueError('No user for email {}'.format(name))
@@ -60,32 +65,41 @@ def get_chat_with_user(user_id):
     return chat_response['channel']['id']
 
 
+def normalize_message(message):
+    # TODO: make this safer
+    return re.sub('<mailto:([^|]+)\|[^>]+>', r'\1', message)
+
+
 def process_message(message):
     if message['type'] != 'message':
         return
 
-    return subprocess.check_output('gym_sub')
+    cmd = 'gym_sub {}'.format(normalize_message(message['text']))
+
+    p = Popen(cmd, shell=True, close_fds=True, stdin=PIPE,
+              stdout=PIPE, stderr=STDOUT)
+    output = p.stdout.read()
+    return output
 
 
 BOT_NAME = 'schedule_keeper'
 BOT_ID = get_user_id_by_name(BOT_NAME)
-sc = SlackClient(settings.SLACK_TOKEN)
 
 
 def message_checks_out(message):
-    if not message:
-        return False
-
-    return all([
-        message['type'] == 'message',
+    return bool(
+        message and
+        message['type'] == 'message' and
+        'user' in message and
         message['user'] != BOT_ID
-    ])
+    )
 
 
 def run():
     if sc.rtm_connect():
         while True:
             messages = sc.rtm_read()
+            # Currently we only take a message
             message = messages[0] if messages else None
 
             if message_checks_out(message) is False:
