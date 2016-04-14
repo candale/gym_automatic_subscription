@@ -257,6 +257,11 @@ class CrossfitScheduler(object):
 
     def schedule(self, activity_name, date, time):
         '''
+        Return true if activity is active and false otherwise.
+        Raises ValueError for anything else:
+            - activity active but no open positions
+            - login failed
+
         ** activity
             The name of the activity you want to make a schedule to
         ** time
@@ -267,7 +272,7 @@ class CrossfitScheduler(object):
         '''
         def activity_matches(activity):
             return all([
-                activity['name'] == activity_name,
+                activity['name'].lower() == activity_name.lower(),
                 activity['time'] == time,
                 activity['date'] == date,
             ])
@@ -302,7 +307,7 @@ class CrossfitScheduler(object):
     def cancel_schedule(self, activity_name, date, time):
         def schedule_matches(schedule):
             return all([
-                schedule['name'] == activity_name,
+                schedule['name'].lower() == activity_name.lower(),
                 schedule['time'] == time,
                 schedule['date'] == date,
             ])
