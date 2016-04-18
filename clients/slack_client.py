@@ -1,11 +1,13 @@
 import re
 import time
+import datetime
 from subprocess import Popen, PIPE, STDOUT
 
 from slackclient import SlackClient
 
 import settings
 from clients.cli import cli
+from commands import create_from_storage
 
 
 sc = SlackClient(settings.SLACK_TOKEN)
@@ -79,11 +81,30 @@ def process_message(message):
     p = Popen(cmd, shell=True, close_fds=True, stdin=PIPE,
               stdout=PIPE, stderr=STDOUT)
     output = p.stdout.read()
-    return output
+    sc.api_call(
+        'chat.postMessage', channel=message['channel'], text=output,
+        as_user=True)
 
 
-BOT_NAME = 'schedule_keeper'
-BOT_ID = get_user_id_by_name(BOT_NAME)
+_BOT_NAME = 'schedule_keeper'
+_BOT_ID = get_user_id_by_name(_BOT_NAME)
+_LAST_TIME_CHECKED = None
+_CHECK_INTERVAL = 30 # minutes
+
+
+def do_stuff():
+    delta = datetime.timedelta(minutes=_CHECK_INTERVAL)
+    now = datetime.datetime.now()
+    if ((_LAST_TIME_CHECKED is not None and
+            now - _LAST_TIME_CHECKED > delta) is False):
+        return
+
+    # try:
+    #     activities = create_from_storage()
+    # except Exception:
+    #     sc.api_call(
+    #         'chat.postMessage', channel=message['channel'], text=output,
+    #         as_user=True)
 
 
 def message_checks_out(message):
@@ -91,7 +112,7 @@ def message_checks_out(message):
         message and
         message['type'] == 'message' and
         'user' in message and
-        message['user'] != BOT_ID
+        message['user'] != _BOT_ID
     )
 
 
@@ -106,10 +127,8 @@ def run():
                 time.sleep(1)
                 continue
 
-            channel = message['channel']
-            result = process_message(message)
-            sc.api_call(
-                'chat.postMessage', channel=channel, text=result, as_user=True)
+            process_message(message)
+            do_stuff()
 
     else:
         raise ValueError('Could not connect')

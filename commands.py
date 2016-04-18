@@ -69,6 +69,9 @@ def create_from_storage(storage_path=None):
     for counter in range(len(data)):
         entry = data[counter]
         date_time = parse_date_time_string(entry['date_time'])
+
+        # TODO: Catch any exceptions and send the activity to calling
+        #       scope with error
         was_scheduled = schedule_activity(
             entry['email'], entry['activity'], date_time.date, date_time.time)
 
