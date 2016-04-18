@@ -11,6 +11,9 @@ logging.basicConfig(filename='gym.log', level=logging.INFO)
 
 
 class CrossfitScheduler(object):
+
+    MAX_HOURS_BEFORE_NOTICE = 18
+
     class Activities:
         CROSSFIT = 'Crossfit'
         TRX = 'Trx'
@@ -255,12 +258,29 @@ class CrossfitScheduler(object):
 
         logging.info('Canceled schedule {}'.format(schedule))
 
+    def _raise_if_should_be_visible(self, activity_name, date, time):
+        max_time = datetime.timedelta(hours=self.MAX_HOURS_BEFORE_NOTICE)
+        activity_date_time = datetime.datetime(
+            date.year, date.month, date.day, time[0], time[1])
+
+        if activity_date_time - datetime.datetime.now() < max_time:
+            raise ValueError(
+                'No activity in the next 24 hours with details: '
+                'Name: {} Date: {} Hour: {}:{}'.format(
+                    activity_name, date, *time)
+            )
+
     def schedule(self, activity_name, date, time):
         '''
-        Return true if activity is active and false otherwise.
+        Return true if activity is programmable and false otherwise
+        (i.e. it does not find an activity that is programmable but it may find
+        it in the future, so it does not raise an error but returns False).
+
         Raises ValueError for anything else:
             - activity active but no open positions
             - login failed
+            - activity is within MAX_HOURS_BEFORE_NOTICE time but it cannot
+              find an activity matching the given details
 
         ** activity
             The name of the activity you want to make a schedule to
@@ -288,6 +308,7 @@ class CrossfitScheduler(object):
         activity = filter(activity_matches, activities)
 
         if not activity:
+            self._raise_if_should_be_visible(activity_name, date, time)
             logging.info('No activity found')
             return False
 

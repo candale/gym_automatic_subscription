@@ -1,9 +1,3 @@
-import datetime
-from collections import namedtuple
-import json
-import re
-import os
-
 import click
 
 from commands import (
@@ -20,7 +14,7 @@ class DateTimeParamType(click.ParamType):
 
     def convert(self, value, param, ctx):
         try:
-            parse_date_time_string(value)
+            return parse_date_time_string(value)
         except:
             self.fail(self._fail_message)
 
@@ -73,7 +67,6 @@ def gym_schedule():
                     'Defaults to home directory'))
 def create(email, activity, date, store_if_not_active, storage_file):
     '''Register for a class'''
-
     for date_time in date:
         try:
             was_scheduled = schedule_activity(
