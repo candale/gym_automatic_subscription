@@ -27,12 +27,18 @@ def save_activity(email, activity_name, date, time, storage_file=None):
         raise ValueError('The file is badly formatted. Check it at {}'
                          .format(file_path))
 
-    data.append({
+    entry = {
         'email': email,
         'activity': activity_name,
         'date_time': '{}-{}:{}'.format(
             date.strftime('%d-%m-%Y'), time[0], time[1])
-    })
+    }
+
+    if entry in data:
+        file_.close()
+        return
+
+    data.append()
 
     file_.seek(0)
     file_.truncate()
