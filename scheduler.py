@@ -46,59 +46,82 @@ class CrossfitScheduler(object):
     def close_driver(self):
         self._dispose_of_driver()
 
-    def _get_all_activities(self):
+    def _get_active_activities_from_cell(self, cell):
         '''
-        Return a list of dictionaries that represents all the active
-        activities.
-
         If an activity can be scheduled, there should be the
         following in the DOM structure
         <strong> ... </strong>              -> name
         <a> ... </a>                        -> schedule link
         <div id="info_<number>"> ... </div> -> activity info
         '''
-        def get_active_activities_from_cell(cell):
-            def is_active_activity(elements):
-                if len(elements) != 3:
-                    return False
+        def is_active_activity(elements):
+            if len(elements) != 3:
+                return False
 
-                a_href = elements[1].get_attribute('href') or ''
-                div_id = elements[2].get_attribute('id') or ''
-                return all((
-                    elements[0].tag_name == 'strong',
-                    elements[1].tag_name == 'a',
-                    elements[2].tag_name == 'div',
-                    'info' in div_id,
-                    'sectiune=programari' in a_href,
-                ))
+            a_href = elements[1].get_attribute('href') or ''
+            div_id = elements[2].get_attribute('id') or ''
+            return all((
+                elements[0].tag_name == 'strong',
+                elements[1].tag_name == 'a',
+                elements[2].tag_name == 'div',
+                'info' in div_id,
+                'sectiune=programari' in a_href,
+            ))
 
-            active = []
-            elements = cell.find_elements_by_xpath('child::*')
+        active = []
+        elements = cell.find_elements_by_xpath('child::*')
 
-            counter = 0
-            while counter < len(elements) - 2:
-                sample = elements[counter: counter + 3]
+        counter = 0
+        while counter < len(elements) - 2:
+            sample = elements[counter: counter + 3]
 
-                if is_active_activity(sample):
-                    # name, link, info
-                    active.append(tuple(sample))
-                    counter += 4
-                else:
-                    counter += 1
+            if is_active_activity(sample):
+                # name, link, info
+                active.append(tuple(sample))
+                counter += 4
+            else:
+                counter += 1
 
-            return active
+        return active
+
+    def _get_all_activities(self):
+        '''
+        Return a list of dictionaries that represents all the active
+        activities.
+        '''
+        def get_from_from_table():
+            activities = []
+            valid_table_cells = self._driver.find_elements_by_xpath(
+                "//td[.//a[contains(@href, 'programari')]]")
+
+            for cell in valid_table_cells:
+                raw_data = self._get_active_activities_from_cell(cell)
+
+                for data in raw_data:
+                    logging.info('Making activity with data {}'.format(data))
+                    activities.append(self._make_activity(data))
+
+            return activities
 
         logging.info('Getting all schedule-able activities')
         activities = []
-        valid_table_cells = self._driver.find_elements_by_xpath(
-            "//td[.//a[contains(@href, 'programari')]]")
 
-        for cell in valid_table_cells:
-            raw_data = get_active_activities_from_cell(cell)
+        # Next week button
+        next_week_but = self._driver.find_element_by_link_text('Umatoare')
 
-            for data in raw_data:
-                logging.info('Making activity with data {}'.format(data))
-                activities.append(self._make_activity(data))
+        # We have to switch to the iframe so we can access the table
+        self._driver.switch_to.frame(
+            self._driver.find_element_by_id('changer2'))
+        activities.extend(get_from_from_table())
+
+        # Go to next week
+        self._driver.switch_to.default_content()
+        next_week_but.click()
+
+        # Switch back to the frame
+        self._driver.switch_to.frame(
+            self._driver.find_element_by_id('changer2'))
+        activities.extend(get_from_from_table())
 
         return activities
 
@@ -201,8 +224,6 @@ class CrossfitScheduler(object):
     def _go_to_schedule_page(self):
         self._driver.get(
             'http://89.137.4.84/site/Extern.php?sectiune=program')
-        self._driver.switch_to.frame(
-            self._driver.find_element_by_id('changer2'))
 
     def _go_to_created_schedules_page(self):
         logging.info('Going to active schedules page')
