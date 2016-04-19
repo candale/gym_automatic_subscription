@@ -71,7 +71,16 @@ def get_chat_with_user(user_id):
 
 def normalize_message(message):
     # TODO: make this safer
-    return re.sub('<mailto:([^|]+)\|[^>]+>', r'\1', message)
+    # The mail is sent in this format
+    # "<mailto:email_addres@doamin.com:email_addres@doamin.com>"
+    msg = re.sub('<mailto:([^|]+)\|[^>]+>', r'\1', message)
+
+    # A small precaution for chained commands or piped or stuff like that
+    msg = msg.replace(';', '')
+    msg = msg.replace('|', '')
+    msg = msg.replace('&', '')
+
+    return msg
 
 
 def process_message(message):
