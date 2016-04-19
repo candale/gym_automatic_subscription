@@ -6,7 +6,6 @@ from subprocess import Popen, PIPE, STDOUT
 from slackclient import SlackClient
 
 import settings
-from clients.cli import cli
 from commands import create_from_storage
 
 
@@ -19,12 +18,15 @@ def raise_if_not_ok(response):
 
 
 def get_user_id_by_email(email):
+    def email_filter(user):
+        return 'email' in user['profile'] and user['profile']['email'] == email
+
     users_response = sc.api_call('users.list')
     raise_if_not_ok(users_response)
 
     users = users_response['members']
 
-    user = filter(lambda user: user['profile']['email'] == email, users)
+    user = filter(email_filter, users)
 
     if not user:
         raise ValueError('No user for email {}'.format(email))
@@ -89,22 +91,32 @@ def process_message(message):
 _BOT_NAME = 'schedule_keeper'
 _BOT_ID = get_user_id_by_name(_BOT_NAME)
 _LAST_TIME_CHECKED = None
-_CHECK_INTERVAL = 30 # minutes
+# In minutes
+_CHECK_INTERVAL = 30
 
 
 def do_stuff():
     delta = datetime.timedelta(minutes=_CHECK_INTERVAL)
     now = datetime.datetime.now()
-    if ((_LAST_TIME_CHECKED is not None and
-            now - _LAST_TIME_CHECKED > delta) is False):
+    if (_LAST_TIME_CHECKED is not None and now - _LAST_TIME_CHECKED < delta):
         return
 
-    # try:
-    #     activities = create_from_storage()
-    # except Exception:
-    #     sc.api_call(
-    #         'chat.postMessage', channel=message['channel'], text=output,
-    #         as_user=True)
+    activities = create_from_storage()
+
+    for activity in activities:
+        user_id = get_user_id_by_email(activity['email'])
+        channel = get_chat_with_user(user_id)
+
+        if activity.get('error'):
+            sc.api_call(
+                'chat.postMessage', channel=channel, text=activity['error'],
+                as_user=True)
+            continue
+
+        text = 'Scheduled you for {} on {} at {}:{}'.format(
+            activity['activity'], activity['date'], *activity['time'])
+        sc.api_call(
+            'chat.postMessage', channel=channel, text=text, as_user=True)
 
 
 def message_checks_out(message):
@@ -117,22 +129,29 @@ def message_checks_out(message):
 
 
 def run():
-    if sc.rtm_connect():
-        while True:
-            messages = sc.rtm_read()
-            # Currently we only take a message
-            message = messages[0] if messages else None
-
-            if message_checks_out(message) is False:
-                time.sleep(1)
-                continue
-
-            process_message(message)
-            do_stuff()
-
-    else:
+    if sc.rtm_connect() is False:
         raise ValueError('Could not connect')
+
+    while True:
+        messages = sc.rtm_read()
+        # Currently we only take a single message
+        message = messages[0] if messages else None
+
+        if message_checks_out(message):
+            process_message(message)
+
+        do_stuff()
+
+        time.sleep(1)
 
 
 if __name__ == '__main__':
-    run()
+    try:
+        run()
+    except Exception, e:
+        user_id = get_user_id_by_email('')
+        channel = get_chat_with_user(user_id)
+
+        sc.api_call(
+            'chat.postMessage', channel=channel,
+            text='ERROR: You just got an error: {}'.format(e))

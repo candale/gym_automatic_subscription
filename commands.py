@@ -69,20 +69,27 @@ def create_from_storage(storage_path=None):
     for counter in range(len(data)):
         entry = data[counter]
         date_time = parse_date_time_string(entry['date_time'])
+        error_message = None
+        was_scheduled = False
 
-        # TODO: Catch any exceptions and send the activity to calling
-        #       scope with error
-        was_scheduled = schedule_activity(
-            entry['email'], entry['activity'], date_time.date, date_time.time)
+        try:
+            was_scheduled = schedule_activity(
+                entry['email'], entry['activity'],
+                date_time.date, date_time.time)
+        except Exception, e:
+            error_message = str(e)
 
-        if was_scheduled:
+        activity = {
+            'email': entry['email'],
+            'activity': entry['activity'],
+            'date': date_time.date,
+            'time': date_time.time,
+            'error': error_message
+        }
+
+        if was_scheduled or error_message:
             scheduled_activities_indexes.append(counter)
-            scheduled_activities.append({
-                'email': entry['email'],
-                'activity': entry['activity'],
-                'date': date_time.date,
-                'time': date_time.time
-            })
+            scheduled_activities.append(activity)
 
     for index in scheduled_activities_indexes:
         data.pop(index)

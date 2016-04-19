@@ -34,7 +34,7 @@ class CrossfitScheduler(object):
         self._dispose_of_driver()
 
     def _init_driver(self):
-        self._driver = webdriver.Firefox()
+        self._driver = webdriver.PhantomJS()
 
     def _dispose_of_driver(self):
         self._driver.close()
