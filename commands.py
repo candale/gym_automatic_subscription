@@ -17,6 +17,8 @@ def save_activity(email, activity_name, date, time, storage_file=None):
     # TODO: we should not check for this every time, just when it is used
     if os.path.isdir(_DEFAULT_STORAGE_DIR) is False:
         os.mkdir(_DEFAULT_STORAGE_DIR)
+        with open(_DEFAULT_STORAGE_FILE, 'w') as file_:
+            json.dump([], file_)
 
     file_path = storage_file or _DEFAULT_STORAGE_FILE
     file_ = open(file_path, 'r+')
