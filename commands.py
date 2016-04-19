@@ -38,7 +38,7 @@ def save_activity(email, activity_name, date, time, storage_file=None):
         file_.close()
         return
 
-    data.append()
+    data.append(entry)
 
     file_.seek(0)
     file_.truncate()

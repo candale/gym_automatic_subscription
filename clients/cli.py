@@ -86,7 +86,7 @@ def create(email, activity, date, store_if_not_active, storage_file):
                 .format(activity, date_time.date, *date_time.time))
 
             if store_if_not_active:
-                save_activity(email, activity, date_time)
+                save_activity(email, activity, date_time.date, date_time.time)
                 click.echo(
                     'The activity details were saved. You can try again '
                     'later by running command run_from_storage')

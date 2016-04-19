@@ -4,6 +4,7 @@ import logging
 import re
 
 from selenium import webdriver
+from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 from selenium.common.exceptions import NoSuchElementException
 
 
@@ -35,7 +36,15 @@ class CrossfitScheduler(object):
         self._dispose_of_driver()
 
     def _init_driver(self):
-        self._driver = webdriver.Firefox()
+        user_agent = (
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_8_4) '
+            'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/29.0.1547.57 '
+            'Safari/537.36'
+        )
+        dcap = dict(DesiredCapabilities.PHANTOMJS)
+        dcap["phantomjs.page.settings.userAgent"] = user_agent
+
+        self._driver = webdriver.PhantomJS(desired_capabilities=dcap)
 
     def _dispose_of_driver(self):
         self._driver.close()
