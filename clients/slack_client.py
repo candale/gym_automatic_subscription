@@ -196,7 +196,7 @@ def run():
         time.sleep(1)
 
 
-if __name__ == '__main__':
+def entry_point():
     try:
         run()
     except Exception, e:

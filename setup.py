@@ -19,5 +19,6 @@ setup(
     entry_points='''
         [console_scripts]
         gym_sub=clients.cli:cli
+        run_slack_client=clients.slack_client:entry_point
     ''',
 )
