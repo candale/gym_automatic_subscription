@@ -22,6 +22,7 @@ class CrossfitScheduler(object):
         PILATES = 'Pilates'
         YOGA = 'Yoga'
         XTREME = 'Xtreme'
+        INSANITY = 'Insanity'
 
     def __init__(self, email, *args, **kwargs):
         self._email = email
@@ -34,7 +35,7 @@ class CrossfitScheduler(object):
         self._dispose_of_driver()
 
     def _init_driver(self):
-        self._driver = webdriver.PhantomJS()
+        self._driver = webdriver.Firefox()
 
     def _dispose_of_driver(self):
         self._driver.close()
@@ -160,7 +161,7 @@ class CrossfitScheduler(object):
 
     def _make_activity(self, data):
         activity = {
-            'name': data[0].text.strip(),
+            'activity': data[0].text.strip(),
             'url': data[1].get_attribute('href'),
             'date': self._get_date_from_url_element(data[1]),
             'time': self._get_start_hour_from_info_element(data[2]),
@@ -240,6 +241,8 @@ class CrossfitScheduler(object):
 
         logging.info('Getting a list of active schedules')
 
+        self._go_to_created_schedules_page()
+
         active_schedules = []
         table = self._driver.find_element_by_xpath(
             "//table[@id='gradient-style']/tbody")
@@ -260,7 +263,7 @@ class CrossfitScheduler(object):
             hour, minute = elements[4].text.split(':')
             cancel_but = last_element.find_element_by_xpath('.//a')
             active_schedules.append({
-                'name': elements[0].text,
+                'activity': elements[0].text,
                 'date': datetime.datetime.strptime(
                     elements[3].text, '%Y-%m-%d').date(),
                 'time': (int(hour), int(minute)),
@@ -268,6 +271,14 @@ class CrossfitScheduler(object):
             })
 
         return active_schedules
+
+    def get_active_schedules(self):
+        schedules = self._get_active_created_schedules()
+
+        for schedule in schedules:
+            schedule.pop('cancel_but')
+
+        return schedules
 
     def _finish_cancelling(self, schedule):
         # Hackish so that every confirm is true so we don't have to
@@ -313,7 +324,7 @@ class CrossfitScheduler(object):
         '''
         def activity_matches(activity):
             return all([
-                activity['name'].lower() == activity_name.lower(),
+                activity['activity'].lower() == activity_name.lower(),
                 activity['time'] == time,
                 activity['date'] == date,
             ])
@@ -349,7 +360,7 @@ class CrossfitScheduler(object):
     def cancel_schedule(self, activity_name, date, time):
         def schedule_matches(schedule):
             return all([
-                schedule['name'].lower() == activity_name.lower(),
+                schedule['activity'].lower() == activity_name.lower(),
                 schedule['time'] == time,
                 schedule['date'] == date,
             ])
@@ -360,7 +371,6 @@ class CrossfitScheduler(object):
                 activity_name, date, *time)
         )
 
-        self._go_to_created_schedules_page()
         active_schedules = self._get_active_created_schedules()
         schedule = filter(schedule_matches, active_schedules)
 

@@ -6,7 +6,7 @@ from subprocess import Popen, PIPE, STDOUT
 from slackclient import SlackClient
 
 import settings
-from commands import create_from_storage
+from commands import create_from_storage, get_active_schedules
 
 
 sc = SlackClient(settings.SLACK_TOKEN)
@@ -90,16 +90,23 @@ def process_message(message):
 
 _BOT_NAME = 'schedule_keeper'
 _BOT_ID = get_user_id_by_name(_BOT_NAME)
-_LAST_TIME_CHECKED = None
+
+_STORAGE_LAST_TIME_CHECKED = None
+_SHOW_ACTIVITIES_LAST_TIME_CHECKED = None
 # In minutes
-_CHECK_INTERVAL = 30
+_STORAGE_CHECK_INTERVAL = 30
+_SHOW_SCHEDULES_AVTIVITIES_INTERVAL = 300
 
 
-def do_stuff():
-    delta = datetime.timedelta(minutes=_CHECK_INTERVAL)
+def run_storage():
+    global _STORAGE_LAST_TIME_CHECKED
+
+    delta = datetime.timedelta(minutes=_STORAGE_CHECK_INTERVAL)
     now = datetime.datetime.now()
-    if (_LAST_TIME_CHECKED is not None and now - _LAST_TIME_CHECKED < delta):
+    if (_STORAGE_LAST_TIME_CHECKED is not None and now - _STORAGE_LAST_TIME_CHECKED < delta):
         return
+
+    _STORAGE_LAST_TIME_CHECKED = datetime.datetime.now()
 
     activities = create_from_storage()
 
@@ -117,6 +124,39 @@ def do_stuff():
             activity['activity'], activity['date'], *activity['time'])
         sc.api_call(
             'chat.postMessage', channel=channel, text=text, as_user=True)
+
+
+def run_show_schedules_activities():
+    global _SHOW_ACTIVITIES_LAST_TIME_CHECKED
+
+    delta = datetime.timedelta(minutes=_SHOW_SCHEDULES_AVTIVITIES_INTERVAL)
+    now = datetime.datetime.now()
+    if (_SHOW_ACTIVITIES_LAST_TIME_CHECKED is not None and
+            now - _SHOW_ACTIVITIES_LAST_TIME_CHECKED < delta):
+        return
+
+    _SHOW_ACTIVITIES_LAST_TIME_CHECKED = datetime.datetime.now()
+
+    schedules = get_active_schedules(settings.EMAIL)
+
+    texts = [
+        'Active schedule for {} on {} at {}:{}'.format(
+            schedule['activity'], schedule['date'], *schedule['time'])
+        for schedule in schedules
+    ]
+    text = '\n'.join(texts)
+    text = 'Reminder of active schedules: \n\n' + text
+
+    user_id = get_user_id_by_email(settings.EMAIL)
+    channel = get_chat_with_user(user_id)
+
+    sc.api_call(
+        'chat.postMessage', channel=channel, text=text, as_user=True)
+
+
+def do_stuff():
+    run_storage()
+    run_show_schedules_activities()
 
 
 def message_checks_out(message):
@@ -149,7 +189,7 @@ if __name__ == '__main__':
     try:
         run()
     except Exception, e:
-        user_id = get_user_id_by_email('')
+        user_id = get_user_id_by_email(settings.EMAIL)
         channel = get_chat_with_user(user_id)
 
         sc.api_call(

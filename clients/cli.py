@@ -2,7 +2,7 @@ import click
 
 from commands import (
     schedule_activity, save_activity, cancel_schedule,
-    create_from_storage as create_from_store)
+    create_from_storage as create_from_store, get_active_schedules)
 from scheduler import CrossfitScheduler
 from helpers import parse_date_time_string
 
@@ -29,6 +29,7 @@ class ClassParamType(click.ParamType):
         CrossfitScheduler.Activities.TRX,
         CrossfitScheduler.Activities.YOGA,
         CrossfitScheduler.Activities.XTREME,
+        CrossfitScheduler.Activities.INSANITY,
     )
 
     def convert(self, value, param, ctx):
@@ -137,3 +138,20 @@ def create_from_storage(storage_file):
             schedule['email'], schedule['activity'], schedule['date'],
             *schedule['time'])
         )
+
+
+@gym_schedule.command()
+@click.option('--email', type=click.STRING, required=True,
+              help='Email address for the registration')
+def list_active(email):
+    '''List active schedules'''
+
+    try:
+        schedules = get_active_schedules(email)
+    except Exception, e:
+        click.echo('Failed with reason: {}'.format(e), err=True)
+        raise click.Abort()
+
+    for schedule in schedules:
+        click.echo('Active schedule for {} on {} at {}:{}'.format(
+            schedule['activity'], schedule['date'], *schedule['time']))

@@ -102,6 +102,11 @@ def create_from_storage(storage_path=None):
     return scheduled_activities
 
 
+def get_active_schedules(email):
+    with CrossfitScheduler(email) as scheduler:
+        return scheduler.get_active_schedules()
+
+
 def schedule_activity(email, activity, date, time):
     with CrossfitScheduler(email) as scheduler:
         return scheduler.schedule(activity, date, time)

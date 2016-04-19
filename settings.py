@@ -1,2 +1,2 @@
-EMAIL_ADDRESS = ''
+EMAIL = ''
 SLACK_TOKEN = ''
