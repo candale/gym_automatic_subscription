@@ -1,6 +1,8 @@
 import re
 import time
 import datetime
+import traceback
+import sys
 from subprocess import Popen, PIPE, STDOUT
 
 from slackclient import SlackClient
@@ -201,6 +203,9 @@ if __name__ == '__main__':
         user_id = get_user_id_by_email(settings.EMAIL)
         channel = get_chat_with_user(user_id)
 
+        exc_type, exc_value, exc_traceback = sys.exc_info()
         sc.api_call(
             'chat.postMessage', channel=channel,
-            text='ERROR: You just got an error: {}'.format(e))
+            text='ERROR: You just got an error: {}.\n Traceback:\n{}'.format(
+                e, '\n'.join(map(str, traceback.extract_tb(exc_traceback)))),
+            as_user=True)
