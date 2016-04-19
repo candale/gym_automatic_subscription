@@ -55,7 +55,7 @@ def create_from_storage(storage_path=None):
         if file_path != _DEFAULT_STORAGE_FILE:
             raise ValueError('The given path does not exist')
 
-        return True
+        return []
 
     file_ = open(file_path, 'r+')
     try:
