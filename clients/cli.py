@@ -3,7 +3,7 @@ import click
 from commands import (
     schedule_activity, save_activity, cancel_schedule,
     create_from_storage as create_from_store, get_active_schedules,
-    get_pending_activities)
+    get_pending_activities, cancel_pending_schedule)
 from scheduler import CrossfitScheduler
 from helpers import parse_date_time_string
 
@@ -176,3 +176,28 @@ def list_pending(email, storage_file):
     for activity in activities:
         click.echo('Pending activity for {} on {} at {}:{}'.format(
             activity['activity'], activity['date'], *activity['time']))
+
+
+@gym_schedule.command()
+@click.option('--email', type=click.STRING, required=True,
+              help='Email address for the registration')
+@click.option('--activity', type=ClassParamType(), required=True,
+              help='The activity you want to register for')
+@click.option('--date', type=DateTimeParamType(), required=True,
+              multiple=True, help='The date(s) for the registration')
+@click.option('--storage-file', default=None,
+              type=click.Path(writable=True, readable=True),
+              help=('File for saving inactive activities. '
+                    'Defaults to home directory'))
+def cancel_pending(email, activity, date, storage_file):
+    import pudb; pu.db
+    for date_time in date:
+        try:
+            cancel_pending_schedule(
+                email, activity, date_time.date, date_time.time)
+        except Exception, e:
+            click.echo('Failed with reason: {}'.format(e), err=True)
+            raise click.Abort()
+
+        click.echo('Canceled pending activity for {} on {} at {}:{}'.format(
+            activity, date_time.date, *date_time.time))

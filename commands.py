@@ -64,6 +64,29 @@ def save_activity(email, activity_name, date, time, storage_file=None):
     _write_activities_to_storage(entries, file_path)
 
 
+def cancel_pending_schedule(
+        email, activity_name, date, time, storage_file=None):
+    def compare_activity(activity):
+        return all((
+            activity['email'] == email,
+            activity['activity'] == activity_name,
+            activity['date'] == date,
+            activity['time'] == time
+        ))
+
+    file_path = storage_file or _DEFAULT_STORAGE_FILE
+    pending_activities = _get_formated_activities_from_storage(file_path)
+
+    # Just in case there are more ...
+    target_activities = filter(compare_activity, pending_activities)
+    if not target_activities:
+        raise ValueError('No pending activity found with given details')
+
+    for activity in target_activities:
+        pending_activities.remove(activity)
+
+    _write_activities_to_storage(pending_activities, file_path)
+
 def create_from_storage(storage_path=None):
     file_path = storage_path or _DEFAULT_STORAGE_FILE
 
