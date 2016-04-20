@@ -313,9 +313,10 @@ class CrossfitScheduler(object):
 
     def schedule(self, activity_name, date, time):
         '''
-        Return true if activity is programmable and false otherwise
-        (i.e. it does not find an activity that is programmable but it may find
-        it in the future, so it does not raise an error but returns False).
+        Return true if activity is programmable and schedule is successful
+        and false otherwise (i.e. it does not find an activity that is
+        programmable but it may find it in the future, so it does not raise an
+        error but returns False).
 
         Raises ValueError for anything else:
             - activity active but no open positions
