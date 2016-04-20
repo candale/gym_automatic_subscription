@@ -190,7 +190,7 @@ def list_pending(email, storage_file):
               help=('File for saving inactive activities. '
                     'Defaults to home directory'))
 def cancel_pending(email, activity, date, storage_file):
-    import pudb; pu.db
+    '''Cancel pending activity'''
     for date_time in date:
         try:
             cancel_pending_schedule(
