@@ -8,7 +8,8 @@ from subprocess import Popen, PIPE, STDOUT
 from slackclient import SlackClient
 
 import settings
-from commands import create_from_storage, get_active_schedules
+from commands import (
+    create_from_storage, get_active_schedules, get_pending_activities)
 
 
 sc = SlackClient(settings.SLACK_TOKEN)
@@ -106,7 +107,7 @@ _STORAGE_LAST_TIME_CHECKED = None
 _SHOW_ACTIVITIES_LAST_TIME_CHECKED = None
 # In minutes
 _STORAGE_CHECK_INTERVAL = 30
-_SHOW_SCHEDULES_AVTIVITIES_INTERVAL = 300
+_SHOW_SCHEDULED_AVTIVITIES_INTERVAL = 300
 
 
 def run_storage():
@@ -137,10 +138,11 @@ def run_storage():
             'chat.postMessage', channel=channel, text=text, as_user=True)
 
 
-def run_show_schedules_activities():
+def run_show_scheduled_and_pending_activities():
     global _SHOW_ACTIVITIES_LAST_TIME_CHECKED
 
-    delta = datetime.timedelta(minutes=_SHOW_SCHEDULES_AVTIVITIES_INTERVAL)
+    # We run this only at _SHOW_SCHEDULED_AVTIVITIES_INTERVAL intervals
+    delta = datetime.timedelta(minutes=_SHOW_SCHEDULED_AVTIVITIES_INTERVAL)
     now = datetime.datetime.now()
     if (_SHOW_ACTIVITIES_LAST_TIME_CHECKED is not None and
             now - _SHOW_ACTIVITIES_LAST_TIME_CHECKED < delta):
@@ -148,15 +150,31 @@ def run_show_schedules_activities():
 
     _SHOW_ACTIVITIES_LAST_TIME_CHECKED = datetime.datetime.now()
 
-    schedules = get_active_schedules(settings.EMAIL)
+    active_schedules = get_active_schedules(settings.EMAIL)
+    pending_activities = get_pending_activities(settings.EMAIL)
 
-    texts = [
+    active_texts = [
         'Active schedule for {} on {} at {}:{}'.format(
             schedule['activity'], schedule['date'], *schedule['time'])
-        for schedule in schedules
+        for schedule in active_schedules
     ]
-    text = '\n'.join(texts)
-    text = 'Reminder of active schedules: \n\n' + text
+    pending_texts = [
+        'Pending activity for {} on {} at {}:{}'.format(
+            activity['activity'], activity['date'], *activity['time'])
+        for activity in pending_activities
+    ]
+
+    if not any((active_texts, pending_texts)):
+        return
+
+    text = (
+        'Reminder of active schedules: \n\n' + '\n'.join(active_texts)
+        if active_texts else ''
+    )
+    text += (
+        '\n\nReminder of pending schedules: \n\n' + '\n'.join(pending_texts)
+        if pending_texts else ''
+    )
 
     user_id = get_user_id_by_email(settings.EMAIL)
     channel = get_chat_with_user(user_id)
@@ -167,7 +185,7 @@ def run_show_schedules_activities():
 
 def do_stuff():
     run_storage()
-    run_show_schedules_activities()
+    run_show_scheduled_and_pending_activities()
 
 
 def message_checks_out(message):

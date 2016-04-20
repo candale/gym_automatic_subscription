@@ -2,7 +2,8 @@ import click
 
 from commands import (
     schedule_activity, save_activity, cancel_schedule,
-    create_from_storage as create_from_store, get_active_schedules)
+    create_from_storage as create_from_store, get_active_schedules,
+    get_pending_activities)
 from scheduler import CrossfitScheduler
 from helpers import parse_date_time_string
 
@@ -155,3 +156,23 @@ def list_active(email):
     for schedule in schedules:
         click.echo('Active schedule for {} on {} at {}:{}'.format(
             schedule['activity'], schedule['date'], *schedule['time']))
+
+
+@gym_schedule.command()
+@click.option('--email', type=click.STRING, required=True,
+              help='Email address for the registration')
+@click.option('--storage-file', default=None,
+              type=click.Path(writable=True, readable=True),
+              help=('File for saving inactive activities. '
+                    'Defaults to home directory'))
+def list_pending(email, storage_file):
+    '''List pending activities'''
+    try:
+        activities = get_pending_activities(email, storage_path=storage_file)
+    except Exception, e:
+        click.echo('Failed with reason: {}'.format(e), err=True)
+        raise click.Abort()
+
+    for activity in activities:
+        click.echo('Pending activity for {} on {} at {}:{}'.format(
+            activity['activity'], activity['date'], *activity['time']))

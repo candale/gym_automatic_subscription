@@ -1,5 +1,6 @@
 import os
 import json
+import copy
 
 from scheduler import CrossfitScheduler
 from helpers import parse_date_time_string
@@ -11,46 +12,7 @@ _DEFAULT_STORAGE_FILE = os.path.join(
     _DEFAULT_STORAGE_DIR, _DEFAULT_STORAGE_FILE_NAME)
 
 
-def save_activity(email, activity_name, date, time, storage_file=None):
-    data = []
-
-    # TODO: we should not check for this every time, just when it is used
-    if os.path.exists(_DEFAULT_STORAGE_FILE) is False:
-        os.mkdir(_DEFAULT_STORAGE_DIR)
-        with open(_DEFAULT_STORAGE_FILE, 'w') as file_:
-            json.dump([], file_)
-
-    file_path = storage_file or _DEFAULT_STORAGE_FILE
-    file_ = open(file_path, 'r+')
-
-    try:
-        data = json.load(file_)
-    except ValueError:
-        raise ValueError('The file is badly formatted. Check it at {}'
-                         .format(file_path))
-
-    entry = {
-        'email': email,
-        'activity': activity_name,
-        'date_time': '{}-{}:{}'.format(
-            date.strftime('%d-%m-%Y'), time[0], time[1])
-    }
-
-    if entry in data:
-        file_.close()
-        return
-
-    data.append(entry)
-
-    file_.seek(0)
-    file_.truncate()
-    json.dump(data, file_)
-    file_.close()
-
-
-def create_from_storage(storage_path=None):
-    file_path = storage_path or _DEFAULT_STORAGE_FILE
-
+def _get_formated_activities_from_storage(file_path):
     # If a path was not specified, we do not throw an error if the default
     # file is missing
     if os.path.exists(file_path) is False:
@@ -59,35 +21,70 @@ def create_from_storage(storage_path=None):
 
         return []
 
-    file_ = open(file_path, 'r+')
-    try:
-        data = json.load(file_)
-    except ValueError:
-        raise ValueError(
-            'The file is not a valid JSON. Check at path {}'.format(file_path))
+    with open(file_path, 'r') as file_:
+        try:
+            data = json.load(file_)
+        except ValueError:
+            raise ValueError(
+                'The file is not a valid JSON. Check at path {}'
+                .format(file_path)
+            )
+
+    for entry in data:
+        date_time = parse_date_time_string(entry.pop('date_time'))
+        entry['date'], entry['time'] = date_time
+
+    return data
+
+
+def _write_activities_to_storage(data, file_path):
+    for entry in data:
+        entry['date_time'] = '{}-{}:{}'.format(
+            entry.pop('date').strftime('%d-%m-%Y'), *entry.pop('time'))
+
+    if os.path.exists(_DEFAULT_STORAGE_FILE) is False:
+        os.mkdir(_DEFAULT_STORAGE_DIR)
+        with open(_DEFAULT_STORAGE_FILE, 'w') as file_:
+            json.dump([], file_)
+
+    with open(file_path, 'w') as file_:
+        json.dump(data, file_)
+
+
+def save_activity(email, activity_name, date, time, storage_file=None):
+    file_path = storage_file or _DEFAULT_STORAGE_FILE
+    entries = _get_formated_activities_from_storage(file_path)
+    entries.append({
+        'email': email,
+        'activity': activity_name,
+        'date': date,
+        'time': time
+    })
+
+    _write_activities_to_storage(entries, file_path)
+
+
+def create_from_storage(storage_path=None):
+    file_path = storage_path or _DEFAULT_STORAGE_FILE
+
+    data = _get_formated_activities_from_storage(file_path)
 
     scheduled_activities = []
     scheduled_activities_indexes = []
     for counter in range(len(data)):
         entry = data[counter]
-        date_time = parse_date_time_string(entry['date_time'])
         error_message = None
         was_scheduled = False
 
         try:
             was_scheduled = schedule_activity(
                 entry['email'], entry['activity'],
-                date_time.date, date_time.time)
+                entry['date'], entry['time'])
         except Exception, e:
             error_message = str(e)
 
-        activity = {
-            'email': entry['email'],
-            'activity': entry['activity'],
-            'date': date_time.date,
-            'time': date_time.time,
-            'error': error_message
-        }
+        activity = copy.copy(entry)
+        activity['error'] = error_message
 
         if was_scheduled or error_message:
             scheduled_activities_indexes.append(counter)
@@ -96,12 +93,16 @@ def create_from_storage(storage_path=None):
     for index in scheduled_activities_indexes:
         data.pop(index)
 
-    file_.seek(0)
-    file_.truncate()
-    json.dump(data, file_)
-    file_.close()
+    _write_activities_to_storage(data, file_path)
 
     return scheduled_activities
+
+
+def get_pending_activities(email, storage_path=None):
+    file_path = storage_path or _DEFAULT_STORAGE_FILE
+    activities = _get_formated_activities_from_storage(file_path)
+
+    return filter(lambda activity: activity['email'] == email, activities)
 
 
 def get_active_schedules(email):
