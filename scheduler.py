@@ -253,8 +253,12 @@ class CrossfitScheduler(object):
         self._go_to_created_schedules_page()
 
         active_schedules = []
-        table = self._driver.find_element_by_xpath(
-            "//table[@id='gradient-style']/tbody")
+        try:
+            table = self._driver.find_element_by_xpath(
+                "//table[@id='gradient-style']/tbody")
+        except NoSuchElementException:
+            return []
+
         all_schedules = table.find_elements_by_xpath(".//tr")
 
         for schedule in all_schedules:
