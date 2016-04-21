@@ -37,6 +37,18 @@ def get_user_id_by_email(email):
     return user[0]['id']
 
 
+def is_general_channel(channel):
+    result = sc.api_call('channels.info', channel=channel)
+
+    if result['ok'] is False:
+        if result['error'] == 'channel_not_found':
+            return False
+
+        raise ValueError('An error occurred: {}'.format(result['error']))
+
+    return result['channel']['is_general']
+
+
 def get_user_id_by_name(name):
     users_response = sc.api_call('users.list')
     raise_if_not_ok(users_response)
@@ -87,6 +99,7 @@ def normalize_message(message):
 
 
 def process_message(message):
+    import pudb; pu.db
     if message['type'] != 'message':
         return
 
@@ -193,7 +206,9 @@ def message_checks_out(message):
         message and
         message['type'] == 'message' and
         'user' in message and
-        message['user'] != _BOT_ID
+        message['user'] != _BOT_ID and
+        'channel' in message and
+        is_general_channel(message['channel']) is False
     )
 
 
