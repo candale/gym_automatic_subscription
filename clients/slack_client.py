@@ -99,7 +99,6 @@ def normalize_message(message):
 
 
 def process_message(message):
-    import pudb; pu.db
     if message['type'] != 'message':
         return
 
@@ -230,15 +229,29 @@ def run():
 
 
 def entry_point():
-    try:
-        run()
-    except Exception, e:
-        user_id = get_user_id_by_email(settings.EMAIL)
-        channel = get_chat_with_user(user_id)
+    last_exception = (datetime.datetime.now() - datetime.timedelta(days=1), 0)
+    while True:
+        try:
+            run()
+        except Exception, e:
+            user_id = get_user_id_by_email(settings.EMAIL)
+            channel = get_chat_with_user(user_id)
 
-        exc_type, exc_value, exc_traceback = sys.exc_info()
-        sc.api_call(
-            'chat.postMessage', channel=channel,
-            text='ERROR: You just got an error: {}.\n Traceback:\n{}'.format(
-                e, '\n'.join(map(str, traceback.extract_tb(exc_traceback)))),
-            as_user=True)
+            exc_type, exc_value, exc_traceback = sys.exc_info()
+            sc.api_call(
+                'chat.postMessage', channel=channel,
+                text='ERROR: You just got an error: {}.\n Traceback:\n{}'.format(
+                    e, '\n'.join(map(str, traceback.extract_tb(exc_traceback)))),
+                as_user=True)
+
+            delta = datetime.datetime.now() - last_exception[0]
+            last_exception = (last_exception[0], last_exception[1] + 1)
+            if delta < datetime.timedelta(minutes=6) and last_exception[1] >= 5:
+                sc.api_call(
+                    'chat.postMessage', channel=channel,
+                    text='Exiting due to too many exceptions',
+                    as_user=True)
+                print 'exiting'
+                exit(1)
+            elif delta >= datetime.timedelta(minutes=6):
+                last_exception = (datetime.datetime.now(), 1)

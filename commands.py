@@ -87,13 +87,14 @@ def cancel_pending_schedule(
 
     _write_activities_to_storage(pending_activities, file_path)
 
+
 def create_from_storage(storage_path=None):
     file_path = storage_path or _DEFAULT_STORAGE_FILE
 
     data = _get_formated_activities_from_storage(file_path)
 
     scheduled_activities = []
-    scheduled_activities_indexes = []
+    entries_to_be_removed = []
     for counter in range(len(data)):
         entry = data[counter]
         error_message = None
@@ -110,11 +111,11 @@ def create_from_storage(storage_path=None):
         activity['error'] = error_message
 
         if was_scheduled or error_message:
-            scheduled_activities_indexes.append(counter)
+            entries_to_be_removed.append(entry)
             scheduled_activities.append(activity)
 
-    for index in scheduled_activities_indexes:
-        data.pop(index)
+    for entry in entries_to_be_removed:
+        data.remove(entry)
 
     _write_activities_to_storage(data, file_path)
 
